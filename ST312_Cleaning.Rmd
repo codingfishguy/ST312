@@ -1,6 +1,5 @@
 ---
 title: "ST312"
-author: "Aodhan hatch and Krish Nair"
 date: "2025-01-25"
 output: html_document
 ---

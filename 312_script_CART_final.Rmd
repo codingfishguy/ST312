@@ -1,6 +1,5 @@
 ---
 title: "ST312 SVMs"
-author: "Aodhan hatch"
 date: "2025-03-16"
 output: html_document
 ---
@@ -16,10 +15,6 @@ data <- read.csv("new_data.csv")
 
 
 ```
-
-
-
-
 
 
 

@@ -1,6 +1,8 @@
 ---
 title: "ST312_models"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r}
@@ -63,8 +65,6 @@ BIC(logistic_model24) #Keep blurb characters
 
 
 
-
-
 ```{r}
 #Interactions
 logistic_model3 <-  glm(state ~ log(backers_count+1)*category + currency + staff_pick + log(goal_usd) + video +  year_centred + desired_duration + blurb_characters, 
@@ -103,6 +103,7 @@ BIC(model_without_backers)
 summary(model_without_backers)
 
 ```
+
 ```{r}
 model_without_backers2 <- glm(state ~ category + currency + log(goal_usd) + video + desired_duration + day_launched + staff_pick+ year_launched + blurb_characters, data = cleaned_kickstarter_data, family = binomial)
 
@@ -117,47 +118,9 @@ model_without_backers4 <-  glm(state ~ category + currency + log(goal_usd) + vid
 BIC(model_without_backers4) #So far best model
 
 ```
+
 ```{r}
 summary(model_without_backers4)
-```
-
-
-
-
-
-
-
-
-
-
-``` {r}
-install.packages("broom")
-install.packages("flextable")
-install.packages("officer")  # optional if exporting to Word
-
-library(broom)
-library(dplyr)
-library(flextable)
-
-# Tidy and round the model output
-tidy_model <- tidy(logistic_model3) %>%
-  mutate(across(where(is.numeric), ~ round(.x, 4)))
-
-# Create the table
-ft <- flextable(tidy_model)
-
-# View it
-ft
-
-```
-
-```{r}
-library(officer)
-doc <- read_docx()
-doc <- body_add_flextable(doc, ft)
-print(doc, target = "logistic_model_summary.docx")
-
-
 ```
 
 
@@ -195,10 +158,6 @@ summary(staff_pick_model)
 
 
 ```
-
-
-
-
 
 
 
@@ -368,6 +327,7 @@ plot(linear_model8)
 
 
 ```
+
 ```{r}
 cleaned_kickstarter_data2 <- cleaned_kickstarter_data[-c(24918, 150773, 183940, 172014, 36051, 172014, 105231), ]
 
