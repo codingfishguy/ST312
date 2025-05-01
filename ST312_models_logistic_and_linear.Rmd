@@ -1,0 +1,404 @@
+---
+title: "ST312_models"
+output: html_document
+---
+
+```{r}
+library(readr)
+library(car)
+cleaned_kickstarter_data <- read_csv("cleaned_kickstarter_data.csv")
+```
+
+
+```{r}
+cleaned_kickstarter_data$category <- as.factor(cleaned_kickstarter_data$category)
+cleaned_kickstarter_data$currency <- as.factor(cleaned_kickstarter_data$currency)
+cleaned_kickstarter_data$month_launched <- as.factor(cleaned_kickstarter_data$month_launched)
+cleaned_kickstarter_data$subcategory <- as.factor(cleaned_kickstarter_data$subcategory)
+cleaned_kickstarter_data$year_centred <- cleaned_kickstarter_data$year_launched - 2009
+cleaned_kickstarter_data <- cleaned_kickstarter_data[!is.na(cleaned_kickstarter_data$backers_count), ]
+cleaned_kickstarter_data <- cleaned_kickstarter_data[!is.na(cleaned_kickstarter_data$blurb_characters), ]
+
+```
+
+```{r}
+
+# Logistic model for predicting success or failure
+#The criteria I will use to evaluate classification models is BIC. 
+#This is because the goal of this project is interpretability, not prediction accuracy.
+
+logistic_model <- glm(state ~ log(backers_count+1) + category + currency + log(goal_usd) + video + desired_duration + day_launched + staff_pick+ year_launched + month_launched + blurb_characters, data = cleaned_kickstarter_data, family = binomial)
+
+#also log transformed goal, backers count and pledged amount removed to help with separation
+
+#removed subcategory as separation was a big problem. Subcategory can be used in the GAM model later on, but for the logistic model it created more problems.
+
+# Display model summary
+summary(logistic_model)
+BIC(logistic_model) #59924.08
+```
+
+
+```{r}
+#Month Launched was not significant in the first model
+logistic_model2 <- glm(state ~ log(backers_count+1) + category + currency + log(goal_usd) + video + desired_duration + day_launched + staff_pick+ year_launched + blurb_characters, data = cleaned_kickstarter_data, family = binomial)
+
+BIC(logistic_model2) #59812.54. Slightly lower, so we keep it removed.
+
+logistic_model22 <-  glm(state ~ log(backers_count+1) + category + currency + log(goal_usd) + video + desired_duration + staff_pick+ year_launched + blurb_characters, data = cleaned_kickstarter_data, family = binomial)
+
+BIC(logistic_model22) #59763.35. Keep day_launched removed
+```
+```{r}
+summary(logistic_model22)
+logistic_model23 <- glm(state ~ log(backers_count+1) + category + currency + log(goal_usd) + video + desired_duration + year_launched + blurb_characters, data = cleaned_kickstarter_data, family = binomial)
+
+BIC(logistic_model23) #Keep staff pick- barely
+
+logistic_model24 <- glm(state ~ log(backers_count+1) + category + currency + log(goal_usd) + video + desired_duration + year_launched, data = cleaned_kickstarter_data, family = binomial)
+
+BIC(logistic_model24) #Keep blurb characters
+
+```
+
+
+
+
+
+```{r}
+#Interactions
+logistic_model3 <-  glm(state ~ log(backers_count+1)*category + currency + staff_pick + log(goal_usd) + video +  year_centred + desired_duration + blurb_characters, 
+                      data = cleaned_kickstarter_data, family = binomial)
+
+
+BIC(logistic_model3) #59537.93. Even better. 
+
+
+logistic_model4 <- glm(state ~ log(backers_count+1)*category + staff_pick+ currency*log(goal_usd) + video +  year_centred + desired_duration +  blurb_characters, 
+                      data = cleaned_kickstarter_data,  family = binomial)
+
+BIC(logistic_model4) # 59661.15. So the interaction between goal and currency wasn't significant.
+
+
+```
+
+
+```{r}
+logistic_model5 <- glm(state ~ log(backers_count+1)*category + currency+log(goal_usd)*category + video +  year_launched + desired_duration + blurb_characters, 
+                      data = cleaned_kickstarter_data, family = binomial)
+
+BIC(logistic_model5) #separation problem again.
+
+#I guess logistic model 3 is the best for now.
+
+```
+
+``` {r}
+summary(logistic_model3) #We gotta go through this again
+```
+```{r}
+model_without_backers <- glm(state ~ category + currency + log(goal_usd) + video + desired_duration + day_launched + staff_pick+ year_launched + month_launched + blurb_characters, data = cleaned_kickstarter_data, family = binomial)
+
+BIC(model_without_backers)
+summary(model_without_backers)
+
+```
+```{r}
+model_without_backers2 <- glm(state ~ category + currency + log(goal_usd) + video + desired_duration + day_launched + staff_pick+ year_launched + blurb_characters, data = cleaned_kickstarter_data, family = binomial)
+
+BIC(model_without_backers2) #month launched becomes slightly significant then
+
+model_without_backers3 <- glm(state ~ category + currency + log(goal_usd) + video + desired_duration + day_launched + month_launched+ staff_pick+ year_launched, data = cleaned_kickstarter_data, family = binomial)
+
+BIC(model_without_backers3)
+
+model_without_backers4 <-  glm(state ~ category + currency + log(goal_usd) + video + desired_duration + month_launched+ staff_pick+ year_launched, data = cleaned_kickstarter_data, family = binomial)
+
+BIC(model_without_backers4) #So far best model
+
+```
+```{r}
+summary(model_without_backers4)
+```
+
+
+
+
+
+
+
+
+
+
+``` {r}
+install.packages("broom")
+install.packages("flextable")
+install.packages("officer")  # optional if exporting to Word
+
+library(broom)
+library(dplyr)
+library(flextable)
+
+# Tidy and round the model output
+tidy_model <- tidy(logistic_model3) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 4)))
+
+# Create the table
+ft <- flextable(tidy_model)
+
+# View it
+ft
+
+```
+
+```{r}
+library(officer)
+doc <- read_docx()
+doc <- body_add_flextable(doc, ft)
+print(doc, target = "logistic_model_summary.docx")
+
+
+```
+
+
+
+``` {r}
+#Logistic Regression Diagnostics
+par(mfrow = c(2, 2))
+plot(logistic_model3)
+
+library(car)
+vif(logistic_model3)
+
+```
+
+
+
+```{r}
+# Filter for staff_pick == TRUE
+staff_pick_data <- subset(cleaned_kickstarter_data, staff_pick == TRUE)
+
+# Count how many of these have state == FALSE
+false_state_count <- sum(staff_pick_data$state == FALSE)
+
+# Total number of staff_pick == TRUE
+total_staff_pick <- nrow(staff_pick_data)
+
+# Calculate percentage
+percentage <- (false_state_count / total_staff_pick) * 100
+
+# Print result
+cat("Percentage of staff_pick with state == FALSE:", round(percentage, 2), "%\n")
+
+staff_pick_model <- glm(state ~ staff_pick, data=cleaned_kickstarter_data, family="binomial")
+summary(staff_pick_model)
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+#Outlier Analysis
+#But do I want to remove influential points? Maybe their influence is a good thing for the model and I want to incorporate their information?
+
+#Could I remove goal_usd outliers? 
+
+#Maybe just something to mention
+
+```
+
+
+
+
+```{r}
+#comparing converted pledged amount and state explicitly
+
+num_rows <- nrow(subset(cleaned_kickstarter_data, state == FALSE & converted_pledged_amount > 10000))
+print(num_rows/nrow(subset(cleaned_kickstarter_data, converted_pledged_amount>10000)))
+
+num_rows2 <- nrow(subset(cleaned_kickstarter_data, state== TRUE & converted_pledged_amount<=100))
+print(num_rows2/nrow(subset(cleaned_kickstarter_data, converted_pledged_amount<=100)))
+
+#This suggests 6% of projects that make over $10,000 still fail to reach their goal. 
+#However, 1% of projects that make less than $100 still end up reaching their goal.
+
+#So while converted_pledged_amount and state are pretty highly correl ated they don't move exactly in tandem. That's why I will more explicitly compare them in the next section.
+```
+
+```{r}
+#Confusion matrix
+train <- sample(1:nrow(cleaned_kickstarter_data), nrow(cleaned_kickstarter_data)/2)
+test <- (-train)
+
+training_data <- cleaned_kickstarter_data[train, ]
+test_data <- cleaned_kickstarter_data[test, ]
+
+dummy_logistic_withoutbackers <-  glm(state ~ category + currency + log(goal_usd) + video + desired_duration + month_launched+ staff_pick+ year_launched, data = training_data, family = binomial)
+
+dummy_logistic <- glm(state ~ log(backers_count+1)*category + currency + staff_pick + log(goal_usd) + video +  year_centred + desired_duration + blurb_characters, 
+                      data = training_data, family = binomial)
+
+predictions1 <- predict(dummy_logistic, newdata = test_data, type = "response")
+predictions2 <- predict(dummy_logistic_withoutbackers, newdata = test_data, type = "response")
+
+confusion_matrix1 <- table(test_data$state, predictions1 > 0.5)
+print(confusion_matrix1)
+
+confusion_matrix2 <- table(test_data$state, predictions2 > 0.5)
+print(confusion_matrix2)
+```
+
+```{r}
+accuracy1 <- sum(diag(confusion_matrix1)) / sum(confusion_matrix1)
+print(accuracy1)
+
+accuracy2<- sum(diag(confusion_matrix2)) / sum(confusion_matrix2)
+print(accuracy2)
+
+```
+
+```{r}
+#Predicting converted_pledged_amount
+
+linear_model <- lm(converted_pledged_amount ~ backers_count + category + currency + staff_pick +
+                     video + day_launched +  goal_usd + campaign_duration + year_launched + month_launched + 
+                     blurb_characters, data = cleaned_kickstarter_data)
+
+summary(linear_model)
+
+#Surprisingly, campaign duration IS significant here by quite a lot. 
+#Additionally, video and goal are insignificant.
+#Month_launched is STILL insignificant
+
+linear_model2 <- lm(converted_pledged_amount ~ backers_count + category + currency + staff_pick +
+                     campaign_duration + day_launched+ year_launched + blurb_characters, data = cleaned_kickstarter_data)
+
+summary(linear_model2)
+
+```
+
+``` {r}
+#Diagnostics of the linear model
+par(mfrow = c(2, 2))
+plot(linear_model2)
+
+#QQ-plot indicates residuals are definitely NOT from a linear distribution. 
+
+```
+``` {r}
+linear_model3 <- lm(log(converted_pledged_amount+1) ~ backers_count + goal_usd + video + category + currency + staff_pick + campaign_duration + year_launched + day_launched+ blurb_characters, data = cleaned_kickstarter_data)
+
+# Need to look at variable selection now that I've logged the outcome
+
+summary(linear_model3)
+BIC(linear_model3)
+```
+
+``` {r}
+#Diagnostics of the linear model3- which transforms the pledged amount with a log
+par(mfrow = c(2, 2))
+plot(linear_model3)
+
+#Much better residuals, but QQ-plot still deviates down at the left slightly
+```
+
+
+
+```{r}
+linear_model4 <- lm(log(converted_pledged_amount+1) ~ log(backers_count+1) + log(goal_usd) + video + category + currency + staff_pick + campaign_duration + year_launched + day_launched+ blurb_characters, data = cleaned_kickstarter_data)
+
+par(mfrow = c(2, 2))
+plot(linear_model4)
+
+BIC(linear_model4)
+```
+
+I now look into variable selection, which might improve the diagnostics. If it doesn't, I'll further investigate non-linearity.
+
+```{r}
+BIC(linear_model4)
+
+linear_model5 <- lm(log(converted_pledged_amount+1) ~ log(backers_count+1) + video + category + currency + staff_pick + campaign_duration + year_launched + day_launched+ blurb_characters, data = cleaned_kickstarter_data)
+
+BIC(linear_model5) #so we exclude goal
+
+linear_model6 <-  lm(log(converted_pledged_amount+1) ~ log(backers_count+1) + category + currency + staff_pick + campaign_duration + year_launched + day_launched+ blurb_characters, data = cleaned_kickstarter_data)
+
+BIC(linear_model6) #so we include video
+
+```
+
+```{r}
+summary(linear_model5)
+
+linear_model7 <- lm(log(converted_pledged_amount+1) ~ log(backers_count+1) + video + category + currency + staff_pick + campaign_duration + year_centred + blurb_characters, data = cleaned_kickstarter_data)
+
+BIC(linear_model7) #Lower so we exclude day_launched
+```
+
+```{r}
+#Diagnostics again
+par(mfrow = c(2, 2))
+plot(linear_model7)
+
+
+```
+```{r}
+library(ggplot2)
+
+ggplot(cleaned_kickstarter_data, aes(x=blurb_characters, y=log(converted_pledged_amount+1)))+geom_point()
+ggplot(cleaned_kickstarter_data, aes(x=campaign_duration, y=log(converted_pledged_amount+1)))+geom_point()
+ggplot(cleaned_kickstarter_data, aes(x=year_centred, y=log(converted_pledged_amount+1)))+geom_point()
+
+
+```
+
+```{r}
+#Introducing non-linearity in all terms
+linear_model8 <- lm(log(converted_pledged_amount+1) ~ log(backers_count+1) + video + category + currency + staff_pick + sqrt(campaign_duration) + sqrt(year_launched) + sqrt(blurb_characters), data = cleaned_kickstarter_data)
+
+par(mfrow = c(2, 2))
+plot(linear_model8)
+
+
+```
+```{r}
+cleaned_kickstarter_data2 <- cleaned_kickstarter_data[-c(24918, 150773, 183940, 172014, 36051, 172014, 105231), ]
+
+library(gam)
+
+non_linear_model <- gam(log(converted_pledged_amount+1) ~ log(backers_count+1) + video + category + currency + staff_pick + s(campaign_duration) + s(year_launched) + s(blurb_characters), data = cleaned_kickstarter_data2)
+
+par(mfrow = c(2, 2))
+plot(non_linear_model)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
